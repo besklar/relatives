@@ -2,6 +2,7 @@ package com.besklar.relatives.ui
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.util.LruCache
 import com.besklar.relatives.data.PortraitResult
 import com.besklar.relatives.data.PortraitStore
 import kotlinx.coroutines.Dispatchers
@@ -10,10 +11,21 @@ import kotlinx.coroutines.withContext
 
 fun interface PortraitLoader {
     suspend fun load(path: String, targetPixels: Int): Bitmap?
+    fun peek(path: String): Bitmap? = null
 }
 
 class SavedPortraitLoader(private val store: PortraitStore) : PortraitLoader {
+    private val memory = object : LruCache<String, Bitmap>(8 * 1024 * 1024) {
+        override fun sizeOf(key: String, value: Bitmap): Int = value.allocationByteCount
+    }
+    override fun peek(path: String): Bitmap? = synchronized(memory) {
+        memory.get(path)?.takeUnless { it.isRecycled }
+    }
+
     override suspend fun load(path: String, targetPixels: Int): Bitmap? = withContext(Dispatchers.IO) {
+        if (path.isBlank()) return@withContext null
+        val cached = peek(path)
+        if (cached != null && minOf(cached.width, cached.height) >= targetPixels) return@withContext cached
         val result = store.load(path)
         if (result !is PortraitResult.Ready) return@withContext null
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -29,6 +41,13 @@ class SavedPortraitLoader(private val store: PortraitStore) : PortraitLoader {
             BitmapFactory.Options().apply { inSampleSize = sample })
         try {
             ensureActive()
+            if (decoded != null) synchronized(memory) {
+                val previous = memory.get(path)
+                if (decoded.allocationByteCount <= memory.maxSize() &&
+                    (previous == null || previous.isRecycled || decoded.width > previous.width)) {
+                    memory.put(path, decoded)
+                }
+            }
             decoded
         } catch (failure: kotlinx.coroutines.CancellationException) {
             decoded?.recycle()

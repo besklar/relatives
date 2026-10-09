@@ -142,6 +142,7 @@ class PeopleListViewModelTest {
     }
 
     private class FakeRecords : PersonRecords {
+        override fun observeRelativePortraitPaths(ownerId: String): Flow<Map<String, String>> = kotlinx.coroutines.flow.flowOf(emptyMap())
         val saved = MutableStateFlow<PeopleSnapshot?>(null)
         var refresh: suspend () -> RefreshResult = { RefreshResult.Success() }
         var readGate: CompletableDeferred<Unit>? = null

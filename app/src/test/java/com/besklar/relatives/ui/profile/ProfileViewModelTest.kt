@@ -36,6 +36,16 @@ class ProfileViewModelTest {
     @Before fun start() = Dispatchers.setMain(dispatcher)
     @After fun stop() { store.clear(); Dispatchers.resetMain() }
 
+    @Test fun relativePhotoPathsUpdateWithoutFetchingOtherProfiles() = runTest(dispatcher) {
+        val vm = viewModel()
+        advanceUntilIdle()
+        records.paths.value = mapOf("B-2" to "portraits/B-2.jpg")
+        advanceUntilIdle()
+        assertEquals(records.paths.value, vm.state.value.relativePortraitPaths)
+        assertEquals(listOf("A-1"), records.requested)
+        assertNull(vm.state.value.profile)
+    }
+
     @Test fun savedProfileAppearsWhileIdSpecificRefreshIsPending() = runTest(dispatcher) {
         records.saved.value = profile
         val gate = CompletableDeferred<RefreshResult>()
@@ -93,6 +103,8 @@ class ProfileViewModelTest {
     }
 
     private class FakeRecords : PersonRecords {
+        val paths = MutableStateFlow<Map<String, String>>(emptyMap())
+        override fun observeRelativePortraitPaths(ownerId: String): Flow<Map<String, String>> = paths
         val saved = MutableStateFlow<PersonProfile?>(null)
         val requested = mutableListOf<String>()
         var observedId: String? = null

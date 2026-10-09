@@ -1,24 +1,15 @@
 package com.besklar.relatives.ui.profile
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -27,94 +18,114 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.besklar.relatives.R
 import com.besklar.relatives.model.LifeEvent
 import com.besklar.relatives.model.Relative
-import com.besklar.relatives.ui.PersonPortrait
-import com.besklar.relatives.ui.PortraitLoader
-import com.besklar.relatives.ui.failureText
+import com.besklar.relatives.ui.*
 import com.besklar.relatives.ui.list.lifespan
-import com.besklar.relatives.ui.savedAtText
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(state: ProfileState, onRefresh: () -> Unit, onBack: () -> Unit,
-    onRelativeClick: (String) -> Unit, portraits: PortraitLoader) {
+    onRelativeClick: (String) -> Unit, portraits: PortraitLoader,
+    preview: ProfilePreview? = null,
+    onOpenPreview: ((ProfilePreview, String) -> Unit)? = null,
+    portraitModifier: @Composable (String, String) -> Modifier = { _, _ -> Modifier }) {
     Scaffold(topBar = {
         TopAppBar(title = { Text(stringResource(R.string.profile)) }, navigationIcon = {
             IconButton(onClick = onBack) {
                 Icon(painterResource(R.drawable.ic_back), contentDescription = stringResource(R.string.back))
             }
-        }, actions = {
-            TextButton(onClick = onRefresh, enabled = !state.refreshing) { Text(stringResource(R.string.refresh)) }
-        })
+        }, actions = { RefreshAction(state.refreshing, onRefresh) })
     }) { padding ->
         PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = onRefresh,
             modifier = Modifier.fillMaxSize().padding(padding)) {
             val profile = state.profile
-            when {
-                state.readingStore || (profile == null && (state.refreshing || state.failure == null)) -> {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally,
+            val identity = profile?.person?.let {
+                ProfilePreview(it.id, it.name.fullName, it.lifespan(stringResource(R.string.living)), it.portraitUrl)
+            } ?: preview
+            LazyColumn(Modifier.fillMaxSize().testTag("profile-content"),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                if (identity != null) item(key = "identity") {
+                    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        PersonPortrait(identity.portraitPath, portraits, state.portraitGeneration,
+                            portraitModifier(identity.id, "hero"), 160.dp)
+                        Text(identity.name, style = MaterialTheme.typography.headlineMedium,
+                            textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                        Text(identity.lifespan, style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                when {
+                    state.readingStore || (profile == null && (state.refreshing || state.failure == null)) -> item {
+                        Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(16.dp)) {
                             CircularProgressIndicator()
                             Text(stringResource(R.string.loading_profile))
                         }
                     }
-                }
-                profile == null -> {
-                    Column(Modifier.fillMaxSize().padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                        Text(stringResource(R.string.could_not_load_profile), style = MaterialTheme.typography.titleLarge)
-                        Text(stringResource(R.string.no_saved_profile), Modifier.padding(vertical = 12.dp))
-                        Text(failureText(state.failure))
-                        TextButton(onClick = onRefresh) { Text(stringResource(R.string.try_again)) }
+                    profile == null -> item {
+                        Card(shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
+                            Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Text(stringResource(R.string.could_not_load_profile), style = MaterialTheme.typography.titleLarge)
+                                Text(stringResource(R.string.no_saved_profile))
+                                Text(failureText(state.failure))
+                                TextButton(onClick = onRefresh) { Text(stringResource(R.string.try_again)) }
+                            }
+                        }
                     }
-                }
-                else -> {
-                    LazyColumn(Modifier.fillMaxSize().testTag("profile-content")) {
-                        item {
-                            Column(Modifier.fillMaxWidth().padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                if (state.failure != null) {
-                                    Text(failureText(state.failure), color = MaterialTheme.colorScheme.error)
-                                    TextButton(onClick = onRefresh, enabled = !state.refreshing) {
-                                        Text(stringResource(R.string.try_again))
-                                    }
-                                }
-                                Text(savedAtText(profile.retrievedAt), style = MaterialTheme.typography.bodySmall)
-                                PersonPortrait(profile.person.portraitUrl, portraits, state.portraitGeneration,
-                                    Modifier.align(Alignment.CenterHorizontally), 160.dp)
-                                Text(profile.person.name.fullName, style = MaterialTheme.typography.headlineMedium)
-                                Text(profile.person.lifespan(stringResource(R.string.living)))
+                    else -> {
+                        item(key = "status") {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(savedAtText(profile.retrievedAt), style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                RefreshFeedback(state.failure, state.refreshing, onRefresh)
+                            }
+                        }
+                        item(key = "life") {
+                            ProfileSection(stringResource(R.string.life_details)) {
                                 LifeEventSection(stringResource(R.string.birth), profile.person.birth)
-                                if (profile.person.living) {
-                                    Text(stringResource(R.string.living), style = MaterialTheme.typography.titleMedium)
-                                } else {
+                                if (profile.person.living) Text(stringResource(R.string.living))
+                                else {
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                                     LifeEventSection(stringResource(R.string.death), profile.person.death)
                                 }
-                                Text(stringResource(R.string.occupation), style = MaterialTheme.typography.titleMedium)
+                            }
+                        }
+                        item(key = "occupation") {
+                            ProfileSection(stringResource(R.string.occupation)) {
                                 Text(profile.occupation?.takeIf(String::isNotBlank) ?: stringResource(R.string.not_recorded))
-                                Text(stringResource(R.string.biography), style = MaterialTheme.typography.titleMedium)
-                                Text(profile.biography.takeIf(String::isNotBlank) ?: stringResource(R.string.not_recorded))
-                                Text(stringResource(R.string.relatives), style = MaterialTheme.typography.titleLarge)
-                                if (profile.discardedRelativeCount > 0) {
-                                    Text(pluralStringResource(R.plurals.skipped_relatives,
-                                        profile.discardedRelativeCount, profile.discardedRelativeCount))
-                                }
+                            }
+                        }
+                        item(key = "biography") {
+                            ProfileSection(stringResource(R.string.biography)) {
+                                Text(profile.biography.takeIf(String::isNotBlank) ?: stringResource(R.string.not_recorded),
+                                    style = MaterialTheme.typography.bodyLarge)
+                            }
+                        }
+                        item(key = "relatives-heading") {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                SectionHeading(stringResource(R.string.relatives))
+                                if (profile.discardedRelativeCount > 0) Text(pluralStringResource(R.plurals.skipped_relatives,
+                                    profile.discardedRelativeCount, profile.discardedRelativeCount))
                                 if (profile.relatives.isEmpty()) Text(stringResource(R.string.no_relatives))
                             }
                         }
                         items(profile.relatives, key = { "${it.id}:${it.relationship}" }) { relative ->
-                            Column(Modifier.fillMaxWidth().clickable { onRelativeClick(relative.id) }
-                                .padding(horizontal = 16.dp, vertical = 16.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(relative.name.fullName, style = MaterialTheme.typography.titleMedium)
-                                Text(relationshipText(relative.relationship))
-                                Text(relative.lifespan(), style = MaterialTheme.typography.bodySmall)
-                            }
-                            HorizontalDivider(Modifier.padding(horizontal = 16.dp))
+                            val path = state.relativePortraitPaths[relative.id].orEmpty()
+                            val relation = relationshipText(relative.relationship)
+                            val slot = "relative:${relative.id}:${relative.relationship}"
+                            PersonCard(relative.name.fullName, "$relation · ${relative.lifespan()}", null, path,
+                                portraits, state.portraitGeneration, onClick = {
+                                    if (onOpenPreview != null) onOpenPreview(
+                                        ProfilePreview(relative.id, relative.name.fullName, relative.lifespan(), path), slot)
+                                    else onRelativeClick(relative.id)
+                                }, portraitModifier = portraitModifier(relative.id, slot))
                         }
                     }
                 }
@@ -124,12 +135,26 @@ fun ProfileScreen(state: ProfileState, onRefresh: () -> Unit, onBack: () -> Unit
 }
 
 @Composable
+private fun ProfileSection(title: String, content: @Composable () -> Unit) {
+    Card(shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            SectionHeading(title)
+            content()
+        }
+    }
+}
+
+@Composable
 private fun LifeEventSection(title: String, event: LifeEvent?) {
-    Text(title, style = MaterialTheme.typography.titleMedium)
-    if (event == null) Text(stringResource(R.string.not_recorded))
-    else {
-        Text(event.date)
-        Text(event.place)
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+        if (event == null) Text(stringResource(R.string.not_recorded))
+        else {
+            Text(event.date, style = MaterialTheme.typography.bodyLarge)
+            Text(event.place, style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 
