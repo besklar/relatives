@@ -44,4 +44,12 @@
     </plurals>
     <string name="life_details">Life details</string>
     <string name="view_profile">View %1$s’s profile</string>
+    <string name="open_portrait">Open fullscreen portrait</string>
+    <string name="close_portrait">Close portrait</string>
+    <string name="loading_portrait">Loading portrait…</string>
+    <string name="portrait_unavailable">This portrait isn’t available. Try again.</string>
+    <string name="pinch_to_zoom">Pinch to zoom · Drag to explore</string>
+    <string name="zoom_in">Zoom in</string>
+    <string name="zoom_out">Zoom out</string>
+    <string name="reset_zoom">Reset zoom</string>
 </resources>

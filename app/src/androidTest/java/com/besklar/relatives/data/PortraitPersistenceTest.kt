@@ -20,6 +20,38 @@ import com.besklar.relatives.ui.SavedPortraitLoader
 
 @RunWith(AndroidJUnit4::class)
 class PortraitPersistenceTest {
+    @Test fun fullscreenDecoderCapsLongestSideAndWorksFromSavedFile() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val directory = File(context.filesDir, "portrait-test-${UUID.randomUUID()}")
+        val server = MockWebServer()
+        val client = OkHttpClient()
+        server.start()
+        try {
+            val bytes = ByteArrayOutputStream().use { output ->
+                val bitmap = Bitmap.createBitmap(4096, 128, Bitmap.Config.ARGB_8888)
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
+                bitmap.recycle()
+                output.toByteArray()
+            }
+            server.enqueue(MockResponse().setBody(Buffer().write(bytes)))
+            val store = PortraitStore(directory, client, server.url("/"))
+            val loader = SavedPortraitLoader(store)
+            val capped = loader.loadFullSize("wide.png", 512)!!
+            assertEquals(512, capped.width)
+            assertEquals(16, capped.height)
+            assertSame(capped, loader.loadFullSize("wide.png", 512))
+            server.shutdown()
+            val offline = SavedPortraitLoader(store).loadFullSize("wide.png", 2048)!!
+            assertEquals(2048, offline.width)
+            assertEquals(64, offline.height)
+        } finally {
+            server.shutdown()
+            client.connectionPool.evictAll()
+            client.dispatcher.executorService.shutdown()
+            directory.deleteRecursively()
+        }
+    }
+
     @Test fun displayDecoderSamplesLargeImageAndRetainsOriginalFile() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val directory = File(context.filesDir, "portrait-test-${UUID.randomUUID()}")
