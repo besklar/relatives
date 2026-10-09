@@ -7,6 +7,7 @@ import com.besklar.relatives.data.PersonRepository
 import com.besklar.relatives.data.PortraitStore
 import com.besklar.relatives.data.local.PeopleDatabase
 import com.besklar.relatives.data.remote.recordsService
+import com.besklar.relatives.ui.SavedPortraitLoader
 import okhttp3.OkHttpClient
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -25,4 +26,5 @@ class AppContainer(context: Context) {
         PeopleDatabase::class.java, "relatives.db").build()
     val repository = PersonRepository(database, recordsService(client))
     val portraits = PortraitStore(File(context.filesDir, "portraits"), client)
+    val portraitLoader = SavedPortraitLoader(portraits)
 }

@@ -16,9 +16,39 @@ import org.junit.runner.RunWith
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.UUID
+import com.besklar.relatives.ui.SavedPortraitLoader
 
 @RunWith(AndroidJUnit4::class)
 class PortraitPersistenceTest {
+    @Test fun displayDecoderSamplesLargeImageAndRetainsOriginalFile() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val directory = File(context.filesDir, "portrait-test-${UUID.randomUUID()}")
+        val server = MockWebServer()
+        val client = OkHttpClient()
+        server.start()
+        try {
+            val bytes = ByteArrayOutputStream().use { output ->
+                val bitmap = Bitmap.createBitmap(512, 512, Bitmap.Config.ARGB_8888)
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
+                bitmap.recycle()
+                output.toByteArray()
+            }
+            server.enqueue(MockResponse().setBody(Buffer().write(bytes)))
+            val store = PortraitStore(directory, client, server.url("/"))
+            val displayed = SavedPortraitLoader(store).load("large.png", 64)!!
+            assertEquals(64, displayed.width)
+            displayed.recycle()
+            val original = BitmapFactory.decodeFile((store.load("large.png") as PortraitResult.Ready).file.path)
+            assertEquals(512, original.width)
+            original.recycle()
+            assertEquals(1, server.requestCount)
+        } finally {
+            server.shutdown()
+            client.connectionPool.evictAll()
+            client.dispatcher.executorService.shutdown()
+            directory.deleteRecursively()
+        }
+    }
     @Test fun realImageIsReadableAfterStoreRecreationWithoutNetwork() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val directory = File(context.filesDir, "portrait-test-${UUID.randomUUID()}")
