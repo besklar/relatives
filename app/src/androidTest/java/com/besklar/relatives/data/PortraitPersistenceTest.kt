@@ -35,9 +35,16 @@ class PortraitPersistenceTest {
             }
             server.enqueue(MockResponse().setBody(Buffer().write(bytes)))
             val store = PortraitStore(directory, client, server.url("/"))
-            val displayed = SavedPortraitLoader(store).load("large.png", 64)!!
+            val loader = SavedPortraitLoader(store)
+            val displayed = loader.load("large.png", 64)!!
             assertEquals(64, displayed.width)
-            displayed.recycle()
+            assertSame(displayed, loader.peek("large.png"))
+            assertSame(displayed, loader.load("large.png", 64))
+            val larger = loader.load("large.png", 256)!!
+            assertEquals(256, larger.width)
+            assertSame(larger, loader.peek("large.png"))
+            // The outgoing composition may still hold the smaller decode.
+            assertFalse(displayed.isRecycled)
             val original = BitmapFactory.decodeFile((store.load("large.png") as PortraitResult.Ready).file.path)
             assertEquals(512, original.width)
             original.recycle()
@@ -49,6 +56,39 @@ class PortraitPersistenceTest {
             directory.deleteRecursively()
         }
     }
+    @Test fun memoryCacheEvictsOldImagesWithoutRecyclingActiveReferences() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val directory = File(context.filesDir, "portrait-test-${UUID.randomUUID()}")
+        val server = MockWebServer()
+        val client = OkHttpClient()
+        server.start()
+        try {
+            val bytes = ByteArrayOutputStream().use { output ->
+                val bitmap = Bitmap.createBitmap(512, 512, Bitmap.Config.ARGB_8888)
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
+                bitmap.recycle()
+                output.toByteArray()
+            }
+            val loader = SavedPortraitLoader(PortraitStore(directory, client, server.url("/")))
+            var first: Bitmap? = null
+            repeat(9) { index ->
+                server.enqueue(MockResponse().setBody(Buffer().write(bytes)))
+                val decoded = loader.load("$index.png", 512)!!
+                if (index == 0) first = decoded
+            }
+            assertNull(loader.peek("0.png"))
+            assertNotNull(loader.peek("8.png"))
+            assertFalse(first!!.isRecycled)
+            assertNull(loader.load("", 64))
+            assertEquals(9, server.requestCount)
+        } finally {
+            server.shutdown()
+            client.connectionPool.evictAll()
+            client.dispatcher.executorService.shutdown()
+            directory.deleteRecursively()
+        }
+    }
+
     @Test fun realImageIsReadableAfterStoreRecreationWithoutNetwork() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val directory = File(context.filesDir, "portrait-test-${UUID.randomUUID()}")

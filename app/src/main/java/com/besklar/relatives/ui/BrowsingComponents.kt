@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.besklar.relatives.R
@@ -57,8 +58,11 @@ fun RefreshFeedback(failure: RefreshResult?, refreshing: Boolean, onRefresh: () 
 @Composable
 fun PersonCard(name: String, subtitle: String, detail: String?, path: String,
     portraits: PortraitLoader, generation: Int, onClick: () -> Unit,
-    portraitModifier: Modifier = Modifier) {
-    Card(onClick = onClick, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp),
+    modifier: Modifier = Modifier, portraitModifier: Modifier = Modifier) {
+    val actionLabel = stringResource(R.string.view_profile, name)
+    Card(onClick = onClick, modifier = modifier.fillMaxWidth().semantics {
+        onClick(label = actionLabel, action = null)
+    }, shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp)) {

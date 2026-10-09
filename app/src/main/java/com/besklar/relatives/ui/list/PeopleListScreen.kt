@@ -52,7 +52,7 @@ fun PeopleListScreen(state: PeopleListState, onRefresh: () -> Unit, portraits: P
                     }
                 }
                 snapshot == null -> CenteredMessage(stringResource(R.string.could_not_load_people),
-                    failureText(state.failure), stringResource(R.string.try_again), onRefresh)
+                    failureText(state.failure), stringResource(R.string.try_again), onRefresh, Modifier.fillMaxSize())
                 else -> {
                     LazyColumn(Modifier.fillMaxSize().testTag("people-list"),
                         contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -91,7 +91,7 @@ fun PeopleListScreen(state: PeopleListState, onRefresh: () -> Unit, portraits: P
 
 @Composable
 private fun CenteredMessage(title: String, description: String, action: String, onAction: () -> Unit,
-    modifier: Modifier = Modifier.fillMaxSize(), enabled: Boolean = true) {
+    modifier: Modifier = Modifier, enabled: Boolean = true) {
     Column(modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center) {
         Text(title, style = MaterialTheme.typography.titleLarge)

@@ -1,7 +1,14 @@
 package com.besklar.relatives.ui.profile
 
+import android.graphics.Bitmap
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.mutableStateOf
+import com.besklar.relatives.ui.ProfilePreview
+import kotlinx.coroutines.CompletableDeferred
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -35,6 +42,88 @@ class ProfileScreenTest {
     private fun show(state: ProfileState, back: () -> Unit = {}, retry: () -> Unit = {},
         open: (String) -> Unit = {}) {
         compose.setContent { MaterialTheme { ProfileScreen(state, retry, back, open, portraits) } }
+    }
+
+    @Test fun portraitGrowsContinuouslyDuringSharedTransitionAndReturnsOnBack() {
+        val image = Bitmap.createBitmap(16, 16, Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.BLUE) }
+        val loader = object : PortraitLoader {
+            override fun peek(path: String): Bitmap? = image
+            override suspend fun load(path: String, targetPixels: Int): Bitmap = image
+        }
+        val records = CachedRecords(mapOf("A-1" to profile))
+        compose.setContent { MaterialTheme { RelativesNavigation(records, loader) } }
+        fun bluePixels(): Int {
+            val pixels = compose.onRoot().captureToImage().toPixelMap()
+            var count = 0
+            for (y in 0 until pixels.height) for (x in 0 until pixels.width) {
+                val color = pixels[x, y]
+                if (color.blue > 0.95f && color.red < 0.02f && color.green < 0.02f) count++
+            }
+            return count
+        }
+        val small = bluePixels()
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithText("Ada Whitcomb").performClick()
+        compose.mainClock.advanceTimeBy(160)
+        val halfway = bluePixels()
+        compose.mainClock.advanceTimeBy(400)
+        val large = bluePixels()
+        org.junit.Assert.assertTrue("Portrait must remain visible and grow: $small, $halfway, $large", halfway > small && halfway < large)
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.mainClock.advanceTimeBy(160)
+        val returning = bluePixels()
+        compose.mainClock.advanceTimeBy(400)
+        org.junit.Assert.assertTrue("Portrait must shrink on Back", returning > small && returning < large)
+        compose.mainClock.autoAdvance = true
+        compose.onNodeWithTag("people-list").assertIsDisplayed()
+    }
+
+    @Test fun navigationPreviewKeepsIdentityThroughLoadingAndUncachedFailure() {
+        val state = mutableStateOf(ProfileState(refreshing = true))
+        val preview = ProfilePreview(person.id, person.name.fullName, "1838 – 1903", person.portraitUrl)
+        compose.setContent { MaterialTheme { ProfileScreen(state.value, {}, {}, {}, portraits, preview) } }
+        compose.onNodeWithText("Ada Whitcomb").assertIsDisplayed()
+        compose.onNodeWithText("Loading profile…").assertIsDisplayed()
+        compose.onNodeWithText("Life details").assertDoesNotExist()
+        compose.runOnIdle { state.value = ProfileState(readingStore = false, failure = RefreshResult.NetworkFailure) }
+        compose.onNodeWithText("Ada Whitcomb").assertIsDisplayed()
+        compose.onNodeWithText("No saved profile is available.").assertIsDisplayed()
+        compose.onNodeWithText("Saved story.").assertDoesNotExist()
+    }
+
+    @Test fun relativeCardLoadsKnownPortraitAndUnknownPathRemainsClickable() {
+        val paths = mutableListOf<String>()
+        val image = Bitmap.createBitmap(4, 4, Bitmap.Config.ARGB_8888)
+        val loader = PortraitLoader { path, _ -> paths += path; if (path == "saved-parent.jpg") image else null }
+        val child = relative.copy(id = "C-3", name = PersonName("Unknown", "Child"), relationship = "daughter")
+        var opened: String? = null
+        compose.setContent { MaterialTheme { ProfileScreen(
+            ProfileState(profile.copy(relatives = listOf(relative, child)), readingStore = false,
+                relativePortraitPaths = mapOf("B-2" to "saved-parent.jpg")), {}, {}, { opened = it }, loader) } }
+        compose.onNodeWithTag("profile-content").performScrollToNode(hasText("Amos Whitcomb"))
+        compose.onNodeWithTag("portrait:saved-parent.jpg", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithTag("profile-content").performScrollToNode(hasText("Unknown Child"))
+        compose.onNodeWithText("Unknown Child").performClick()
+        compose.runOnIdle { assertEquals("C-3", opened); assertEquals(true, paths.contains("saved-parent.jpg")) }
+    }
+
+    @Test fun navigatingToPendingProfileShowsPreviewAndBackCancelsRequest() {
+        var canceled = false
+        val records = object : PersonRecords {
+            override fun observeRelativePortraitPaths(ownerId: String): Flow<Map<String, String>> = flowOf(emptyMap())
+            override fun observePeople(): Flow<PeopleSnapshot?> = flowOf(PeopleSnapshot(listOf(person), "today", 1234, 0))
+            override fun observeProfile(id: String): Flow<PersonProfile?> = flowOf(null)
+            override suspend fun refreshPeople(): RefreshResult = RefreshResult.Success()
+            override suspend fun refreshProfile(id: String): RefreshResult =
+                try { CompletableDeferred<RefreshResult>().await() } finally { canceled = true }
+        }
+        compose.setContent { MaterialTheme { RelativesNavigation(records, portraits) } }
+        compose.onNodeWithText("Ada Whitcomb").performClick()
+        compose.onNodeWithText("Ada Whitcomb").assertIsDisplayed()
+        compose.onNodeWithText("Loading profile…").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.onNodeWithTag("people-list").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(true, canceled) }
     }
 
     @Test fun profileShowsRequestedDetailsAndRelativeClickUsesId() {

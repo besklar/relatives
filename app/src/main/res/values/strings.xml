@@ -44,5 +44,4 @@
     </plurals>
     <string name="life_details">Life details</string>
     <string name="view_profile">View %1$s’s profile</string>
-    <string name="photo_unavailable">Photo unavailable</string>
 </resources>
