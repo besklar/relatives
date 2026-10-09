@@ -79,11 +79,13 @@ class PortraitStore(
                 }
 
                 override fun onResponse(call: Call, response: Response) {
-                    try {
-                        val result = response.use {
+                    var unexpected: Exception? = null
+                    val result = try {
+                        response.use {
                             if (!it.isSuccessful) {
                                 return@use PortraitResult.Unavailable(PortraitResult.Reason.HTTP)
                             }
+                            continuation.context.ensureActive()
                             val body = it.body
                             if (body.contentLength() > maxBytes) throw InvalidPortrait()
                             body.byteStream().use { input ->
@@ -108,19 +110,21 @@ class PortraitStore(
                                 PortraitResult.Ready(saved)
                             }
                         }
-                        if (continuation.isActive) continuation.resume(result)
                     } catch (_: InvalidPortrait) {
-                        if (continuation.isActive) {
-                            continuation.resume(PortraitResult.Unavailable(PortraitResult.Reason.INVALID_IMAGE))
-                        }
+                        PortraitResult.Unavailable(PortraitResult.Reason.INVALID_IMAGE)
                     } catch (_: IOException) {
-                        if (continuation.isActive) {
-                            continuation.resume(PortraitResult.Unavailable(PortraitResult.Reason.NETWORK))
-                        }
+                        PortraitResult.Unavailable(PortraitResult.Reason.NETWORK)
                     } catch (failure: Exception) {
-                        if (continuation.isActive) continuation.resumeWithException(failure)
+                        unexpected = failure
+                        null
                     } finally {
                         temporary.delete()
+                    }
+                    // The caller may inspect files immediately after return. Clean up first.
+                    if (continuation.isActive) {
+                        val failure = unexpected
+                        if (failure != null) continuation.resumeWithException(failure)
+                        else continuation.resume(checkNotNull(result))
                     }
                 }
             })
