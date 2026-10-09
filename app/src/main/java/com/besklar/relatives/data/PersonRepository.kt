@@ -11,7 +11,7 @@ import com.besklar.relatives.data.local.toColumns
 import com.besklar.relatives.data.remote.InvalidRecord
 import com.besklar.relatives.data.remote.RecordsService
 import com.besklar.relatives.data.remote.acceptedPeople
-import com.besklar.relatives.data.remote.toModel
+import com.besklar.relatives.data.remote.acceptedRelatives
 import com.besklar.relatives.data.remote.validateId
 import com.besklar.relatives.model.PeopleSnapshot
 import com.besklar.relatives.model.PersonProfile
@@ -68,17 +68,17 @@ class PersonRepository(
         val dto = service.profile(id)
         if (dto.id != id || dto.lastModified.isBlank()) throw InvalidRecord("Invalid profile metadata")
         val person = dto.summary()
-        val relatives = dto.relatives.map { it.toModel() }
+        val accepted = dto.acceptedRelatives()
         database.withTransaction {
             dao.putProfile(ProfileRow(id, person.toColumns(), dto.occupation, dto.biography,
-                dto.lastModified, clock.millis()))
+                dto.lastModified, clock.millis(), accepted.discardedCount))
             dao.clearRelatives(id)
-            dao.putRelatives(relatives.mapIndexed { position, relative ->
+            dao.putRelatives(accepted.relatives.mapIndexed { position, relative ->
                 RelativeRow(id, position, relative.id, relative.relationship,
                     relative.name.given, relative.name.surname, relative.birthYear, relative.deathYear)
             })
         }
-        RefreshResult.Success()
+        RefreshResult.Success(accepted.discardedCount)
     }
 
     private suspend fun refresh(block: suspend () -> RefreshResult): RefreshResult = refreshMutex.withLock {

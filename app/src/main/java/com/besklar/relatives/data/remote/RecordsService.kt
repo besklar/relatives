@@ -72,7 +72,7 @@ data class ProfileDto(
     val portraitUrl: String,
     val occupation: String? = null,
     val biography: String,
-    val relatives: List<RelativeDto>,
+    val relatives: List<JsonElement>,
     val lastModified: String,
 ) {
     fun summary(): PersonSummary = SummaryDto(id, name, sex, living, birth, death, portraitUrl).toModel()
@@ -104,6 +104,27 @@ fun RelativeDto.toModel(): Relative {
     validateId(id)
     if (relationship.isBlank()) throw InvalidRecord("Missing relationship")
     return Relative(id, relationship, name.toModel(), birthYear, deathYear)
+}
+
+data class AcceptedRelatives(val relatives: List<Relative>, val discardedCount: Int)
+
+suspend fun ProfileDto.acceptedRelatives(): AcceptedRelatives = withContext(Dispatchers.Default) {
+    val accepted = mutableListOf<Relative>()
+    val links = mutableSetOf<Pair<String, String>>()
+    var discarded = 0
+    for (element in relatives) {
+        currentCoroutineContext().ensureActive()
+        val relative = try {
+            recordsJson.decodeFromJsonElement<RelativeDto>(element).toModel()
+        } catch (_: SerializationException) {
+            null
+        } catch (_: InvalidRecord) {
+            null
+        }
+        if (relative != null && links.add(relative.id to relative.relationship)) accepted += relative
+        else discarded++
+    }
+    AcceptedRelatives(accepted, discarded)
 }
 
 data class AcceptedPeople(val people: List<PersonSummary>, val updated: String, val discardedCount: Int)

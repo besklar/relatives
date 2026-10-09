@@ -1,7 +1,6 @@
 package com.besklar.relatives.ui.list
 
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,10 +8,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -23,28 +20,23 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.unit.dp
 import com.besklar.relatives.R
-import com.besklar.relatives.data.RefreshResult
 import com.besklar.relatives.model.PersonSummary
 import com.besklar.relatives.ui.PortraitLoader
-import java.text.DateFormat
-import java.util.Date
+import com.besklar.relatives.ui.PersonPortrait
+import com.besklar.relatives.ui.failureText
+import com.besklar.relatives.ui.savedAtText
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PeopleListScreen(state: PeopleListState, onRefresh: () -> Unit, portraits: PortraitLoader) {
+fun PeopleListScreen(state: PeopleListState, onRefresh: () -> Unit, portraits: PortraitLoader,
+    onPersonClick: (String) -> Unit = {}) {
     Scaffold(topBar = {
         TopAppBar(title = { Text(stringResource(R.string.app_name)) }, actions = {
             TextButton(onClick = onRefresh, enabled = !state.refreshing) {
@@ -79,9 +71,7 @@ fun PeopleListScreen(state: PeopleListState, onRefresh: () -> Unit, portraits: P
                                 verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text(pluralStringResource(R.plurals.people_count, snapshot.people.size, snapshot.people.size),
                                     style = MaterialTheme.typography.titleMedium)
-                                val saved = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
-                                    .format(Date(snapshot.retrievedAt))
-                                Text(stringResource(R.string.saved_at, saved),
+                                Text(savedAtText(snapshot.retrievedAt),
                                     style = MaterialTheme.typography.bodySmall)
                                 if (snapshot.discardedRecordCount > 0) {
                                     Text(pluralStringResource(R.plurals.skipped_people,
@@ -104,7 +94,7 @@ fun PeopleListScreen(state: PeopleListState, onRefresh: () -> Unit, portraits: P
                             }
                         }
                         items(snapshot.people, key = { it.id }) { person ->
-                            PersonRow(person, portraits, state.portraitGeneration)
+                            PersonRow(person, portraits, state.portraitGeneration, onPersonClick)
                             HorizontalDivider(Modifier.padding(start = 88.dp, end = 16.dp))
                         }
                     }
@@ -126,8 +116,10 @@ private fun CenteredMessage(title: String, description: String, action: String, 
 }
 
 @Composable
-private fun PersonRow(person: PersonSummary, portraits: PortraitLoader, generation: Int) {
-    Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp),
+private fun PersonRow(person: PersonSummary, portraits: PortraitLoader, generation: Int,
+    onPersonClick: (String) -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable { onPersonClick(person.id) }.padding(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically) {
         PersonPortrait(person.portraitUrl, portraits, generation)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -137,30 +129,3 @@ private fun PersonRow(person: PersonSummary, portraits: PortraitLoader, generati
         }
     }
 }
-
-@Composable
-fun PersonPortrait(path: String, portraits: PortraitLoader, generation: Int, modifier: Modifier = Modifier,
-    size: androidx.compose.ui.unit.Dp = 56.dp) {
-    val pixels = with(LocalDensity.current) { size.roundToPx() }
-    val bitmap by produceState<android.graphics.Bitmap?>(null, path, pixels, generation) {
-        value = null
-        value = portraits.load(path, pixels)
-    }
-    val frame = modifier.size(size).clip(CircleShape)
-    if (bitmap != null) {
-        Image(bitmap!!.asImageBitmap(), contentDescription = null,
-            modifier = frame.testTag("portrait:$path"), contentScale = ContentScale.Crop)
-    } else {
-        Box(frame.background(MaterialTheme.colorScheme.secondaryContainer), contentAlignment = Alignment.Center) {
-            Text(stringResource(R.string.portrait_placeholder), style = MaterialTheme.typography.titleLarge)
-        }
-    }
-}
-
-@Composable
-private fun failureText(failure: RefreshResult?): String = stringResource(when (failure) {
-    RefreshResult.NetworkFailure -> R.string.network_failure
-    is RefreshResult.HttpFailure -> R.string.service_failure
-    RefreshResult.StorageFailure -> R.string.storage_failure
-    else -> R.string.records_failure
-})
