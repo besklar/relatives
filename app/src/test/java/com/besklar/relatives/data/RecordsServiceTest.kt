@@ -3,6 +3,8 @@ package com.besklar.relatives.data
 import com.besklar.relatives.data.remote.InvalidRecord
 import com.besklar.relatives.data.remote.PeopleEnvelopeDto
 import com.besklar.relatives.data.remote.acceptedPeople
+import com.besklar.relatives.data.remote.acceptedRelatives
+import com.besklar.relatives.data.remote.ProfileDto
 import com.besklar.relatives.data.remote.recordsJson
 import com.besklar.relatives.data.remote.recordsService
 import kotlinx.coroutines.test.runTest
@@ -83,8 +85,31 @@ class RecordsServiceTest {
         val profile = service.profile("A-1")
         assertEquals("/persons/A-1.json", server.takeRequest().path)
         assertNull(profile.occupation)
-        assertEquals("B-2", profile.relatives.single().id)
+        assertEquals("B-2", profile.acceptedRelatives().relatives.single().id)
         assertEquals("Ada Whitcomb", profile.summary().name.fullName)
+    }
+
+    @Test fun badAndDuplicateRelativesAreDiscardedWhileCoreProfileRemainsUsable() = runTest {
+        val unfamiliar = Fixtures.relative("C-3").replace("father", "cousin")
+        val body = Fixtures.profile(relatives = listOf(Fixtures.relative(), "{}", "null",
+            Fixtures.relative(), unfamiliar).joinToString(","))
+        val dto = recordsJson.decodeFromString<ProfileDto>(body)
+        val accepted = dto.acceptedRelatives()
+        assertEquals("Ada Whitcomb", dto.summary().name.fullName)
+        assertEquals(listOf("B-2", "C-3"), accepted.relatives.map { it.id })
+        assertEquals("cousin", accepted.relatives.last().relationship)
+        assertEquals(3, accepted.discardedCount)
+    }
+
+    @Test fun allInvalidAndEmptyRelativesStillAllowUsableProfileCore() = runTest {
+        val invalid = recordsJson.decodeFromString<ProfileDto>(Fixtures.profile(relatives = "{},null"))
+            .acceptedRelatives()
+        assertTrue(invalid.relatives.isEmpty())
+        assertEquals(2, invalid.discardedCount)
+        val empty = recordsJson.decodeFromString<ProfileDto>(Fixtures.profile(relatives = ""))
+            .acceptedRelatives()
+        assertTrue(empty.relatives.isEmpty())
+        assertEquals(0, empty.discardedCount)
     }
 
     @Test fun httpAndTransportFailuresRemainFailures() = runTest {

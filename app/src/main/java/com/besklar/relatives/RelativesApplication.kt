@@ -23,7 +23,7 @@ class AppContainer(context: Context) {
         .callTimeout(20, TimeUnit.SECONDS)
         .build()
     private val database = Room.databaseBuilder(context.applicationContext,
-        PeopleDatabase::class.java, "relatives.db").build()
+        PeopleDatabase::class.java, "relatives.db").addMigrations(PeopleDatabase.MIGRATION_1_2).build()
     val repository = PersonRepository(database, recordsService(client))
     val portraits = PortraitStore(File(context.filesDir, "portraits"), client)
     val portraitLoader = SavedPortraitLoader(portraits)

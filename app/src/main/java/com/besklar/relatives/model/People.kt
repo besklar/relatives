@@ -38,4 +38,5 @@ data class PersonProfile(
     val relatives: List<Relative>,
     val lastModified: String,
     val retrievedAt: Long,
+    val discardedRelativeCount: Int = 0,
 )

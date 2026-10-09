@@ -41,7 +41,8 @@ class PersonRepositoryTest {
     private val clock = Clock.fixed(Instant.parse("2026-10-09T00:00:00Z"), ZoneOffset.UTC)
 
     @Before fun open() {
-        db = Room.databaseBuilder(context, PeopleDatabase::class.java, name).build()
+        db = Room.databaseBuilder(context, PeopleDatabase::class.java, name)
+            .addMigrations(PeopleDatabase.MIGRATION_1_2).build()
         repository = PersonRepository(db, service, clock)
     }
     @After fun close() {
@@ -118,7 +119,8 @@ class PersonRepositoryTest {
         val list = repository.observePeople().first()
         val profile = repository.observeProfile("A-1").first()
         db.close()
-        db = Room.databaseBuilder(context, PeopleDatabase::class.java, name).build()
+        db = Room.databaseBuilder(context, PeopleDatabase::class.java, name)
+            .addMigrations(PeopleDatabase.MIGRATION_1_2).build()
         repository = PersonRepository(db, service, clock)
         service.failure = IOException("offline")
         assertEquals(list, repository.observePeople().first())
@@ -138,6 +140,29 @@ class PersonRepositoryTest {
         assertEquals(previous, repository.observePeople().first())
         service.beforeList = null
         assertEquals(RefreshResult.Success(), repository.refreshPeople())
+    }
+
+    @Test fun malformedRelativesAreSkippedAndCountSurvivesReopen() = runBlocking {
+        service.profileBody = Fixtures.profile(relatives = "${Fixtures.relative()}, {}, null, ${Fixtures.relative()}")
+        assertEquals(RefreshResult.Success(3), repository.refreshProfile("A-1"))
+        val saved = repository.observeProfile("A-1").first()!!
+        assertEquals("A family story.", saved.biography)
+        assertEquals(listOf("B-2"), saved.relatives.map { it.id })
+        assertEquals(3, saved.discardedRelativeCount)
+        db.close()
+        db = Room.databaseBuilder(context, PeopleDatabase::class.java, name)
+            .addMigrations(PeopleDatabase.MIGRATION_1_2).build()
+        repository = PersonRepository(db, service, clock)
+        assertEquals(saved, repository.observeProfile("A-1").first())
+    }
+
+    @Test fun entirelyInvalidRelativesStillSaveValidCoreWithExplicitSkippedCount() = runBlocking {
+        service.profileBody = Fixtures.profile(relatives = "{}, null")
+        assertEquals(RefreshResult.Success(2), repository.refreshProfile("A-1"))
+        val saved = repository.observeProfile("A-1").first()!!
+        assertEquals("Ada Whitcomb", saved.person.name.fullName)
+        assertTrue(saved.relatives.isEmpty())
+        assertEquals(2, saved.discardedRelativeCount)
     }
 
     @Test fun cancellationInsideRoomTransactionRollsBackChanges() = runBlocking {

@@ -1,6 +1,9 @@
 package com.besklar.relatives.data.local
 
 import androidx.room.Dao
+import androidx.room.ColumnInfo
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.room.Database
 import androidx.room.Embedded
 import androidx.room.Entity
@@ -74,6 +77,7 @@ data class ProfileRow(
     val biography: String,
     val lastModified: String,
     val retrievedAt: Long,
+    @ColumnInfo(defaultValue = "0") val discardedRelativeCount: Int = 0,
 )
 
 @Entity(
@@ -112,7 +116,7 @@ data class SavedProfile(
     fun toModel() = PersonProfile(
         profile.person.toModel(profile.id), profile.occupation, profile.biography,
         relatives.sortedBy { it.position }.map(RelativeRow::toModel),
-        profile.lastModified, profile.retrievedAt,
+        profile.lastModified, profile.retrievedAt, profile.discardedRelativeCount,
     )
 }
 
@@ -131,7 +135,15 @@ interface PeopleDao {
 }
 
 @Database(entities = [ListSnapshotRow::class, SummaryRow::class, ProfileRow::class, RelativeRow::class],
-    version = 1, exportSchema = true)
+    version = 2, exportSchema = true)
 abstract class PeopleDatabase : RoomDatabase() {
     abstract fun peopleDao(): PeopleDao
+
+    companion object {
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE profiles ADD COLUMN discardedRelativeCount INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+    }
 }
