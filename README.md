@@ -105,7 +105,7 @@ flowchart LR
 
 A running emulator or connected device is required for instrumentation.
 
-**CI:** GitHub Actions runs the same checks on pull requests and pushes to `main`, using JDK 21 and an API 36 emulator with animations enabled. The badge reflects the latest main run; each run summarizes actual test counts and saves test/lint reports for seven days.
+**CI:** GitHub Actions runs JVM tests, lint and the APK build on pull requests and pushes to `main`, using JDK 21. The badge reflects the latest main run; each run summarizes actual JVM test counts and saves test/lint reports for seven days. Android instrumentation tests run locally on an emulator or device.
 
 - **Automated results:** **34 JVM + 38 Android tests pass** on API 36; `assembleDebug` and `lintDebug` pass. Lint reports zero errors and 19 unsuppressed tool/dependency/backup warnings.
 - **Tests earn their keep at failure boundaries:** HTTP decoding, partial-record recovery, SQLite rollback/migration/reopen, cancellation, image corruption/limits/cache reuse, ViewModel states, navigation, rendered transition midpoints and fullscreen gestures.
@@ -153,4 +153,4 @@ A running emulator or connected device is required for instrumentation.
 
 - **Measured implementation/verification:** Approximately 78 minutes across seven phases, including about 13 minutes for the fullscreen viewer and README cleanup.
 - **Total elapsed project time:** approximately 2 hours 24 minutes, from about 6:00 p.m. to 8:24 p.m. on October 8, 2026 (America/Denver), including planning and review pauses. The first commit was at 6:08 p.m.
-- **AI assistance:** used for planning, implementation and verification. The author reviews decisions and must be able to explain and defend the code.
+- AI-assisted development was used for implementation support, test generation, and documentation. Architecture, product behavior, security decisions, and final verification remain subject to human review.
