@@ -42,4 +42,7 @@
         <item quantity="one">%1$d relative couldn’t be read and was skipped.</item>
         <item quantity="other">%1$d relatives couldn’t be read and were skipped.</item>
     </plurals>
+    <string name="life_details">Life details</string>
+    <string name="view_profile">View %1$s’s profile</string>
+    <string name="photo_unavailable">Photo unavailable</string>
 </resources>

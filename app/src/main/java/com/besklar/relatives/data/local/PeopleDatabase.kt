@@ -120,8 +120,14 @@ data class SavedProfile(
     )
 }
 
+data class RelativePortraitPath(val targetId: String, val portraitUrl: String?)
+
 @Dao
 interface PeopleDao {
+    @Query("""SELECT DISTINCT r.targetId, COALESCE(p.portraitUrl, s.portraitUrl) AS portraitUrl
+        FROM relatives r LEFT JOIN profiles p ON p.id = r.targetId
+        LEFT JOIN person_summaries s ON s.id = r.targetId WHERE r.ownerProfileId = :ownerId""")
+    fun observeRelativePortraitPaths(ownerId: String): Flow<List<RelativePortraitPath>>
     @Transaction @Query("SELECT * FROM list_snapshots WHERE id = 1")
     fun observePeople(): Flow<SavedList?>
     @Transaction @Query("SELECT * FROM profiles WHERE id = :id")

@@ -108,6 +108,7 @@ class ProfileScreenTest {
     }
 
     private inner class CachedRecords(private val profiles: Map<String, PersonProfile>) : PersonRecords {
+        override fun observeRelativePortraitPaths(ownerId: String): Flow<Map<String, String>> = kotlinx.coroutines.flow.flowOf(emptyMap())
         val requested = mutableListOf<String>()
         var listRefreshes = 0
         override fun observePeople(): Flow<PeopleSnapshot?> =

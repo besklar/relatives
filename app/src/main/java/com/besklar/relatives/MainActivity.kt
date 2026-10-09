@@ -4,7 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.material3.MaterialTheme
+import com.besklar.relatives.ui.RelativesTheme
 import com.besklar.relatives.ui.RelativesNavigation
 
 class MainActivity : ComponentActivity() {
@@ -13,7 +13,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         val container = (application as RelativesApplication).container
         setContent {
-            MaterialTheme {
+            RelativesTheme {
                 RelativesNavigation(container.repository, container.portraitLoader)
             }
         }

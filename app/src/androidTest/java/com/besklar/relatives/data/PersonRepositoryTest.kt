@@ -50,6 +50,26 @@ class PersonRepositoryTest {
         context.deleteDatabase(name)
     }
 
+    @Test fun relativePortraitLookupUsesProfileThenSummaryAndPreservesUnknowns() = runBlocking {
+        service.profileBody = Fixtures.profile(relatives = "${Fixtures.relative()}, ${Fixtures.relative("C-3")}")
+        repository.refreshProfile("A-1")
+        assertTrue(repository.observeRelativePortraitPaths("A-1").first().isEmpty())
+        service.listBody = Fixtures.people(Fixtures.summary("B-2"))
+        repository.refreshPeople()
+        assertEquals(mapOf("B-2" to "portraits/B-2.jpg"), repository.observeRelativePortraitPaths("A-1").first())
+        service.profileBody = Fixtures.profile("B-2", relatives = "").replace("portraits/B-2.jpg", "portraits/new-B-2.jpg")
+        repository.refreshProfile("B-2")
+        assertEquals(mapOf("B-2" to "portraits/new-B-2.jpg"), repository.observeRelativePortraitPaths("A-1").first())
+        service.listBody = Fixtures.people()
+        repository.refreshPeople()
+        db.close()
+        db = Room.databaseBuilder(context, PeopleDatabase::class.java, name)
+            .addMigrations(PeopleDatabase.MIGRATION_1_2).build()
+        repository = PersonRepository(db, service, clock)
+        assertEquals(mapOf("B-2" to "portraits/new-B-2.jpg"), repository.observeRelativePortraitPaths("A-1").first())
+        assertTrue(repository.observeRelativePortraitPaths("unknown").first().isEmpty())
+    }
+
     @Test fun uncachedAndSuccessfullyEmptyAreDifferent() = runBlocking {
         assertNull(repository.observePeople().first())
         service.listBody = Fixtures.people()

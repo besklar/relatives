@@ -17,6 +17,7 @@ data class ProfileState(
     val refreshing: Boolean = false,
     val failure: RefreshResult? = null,
     val portraitGeneration: Int = 0,
+    val relativePortraitPaths: Map<String, String> = emptyMap(),
 )
 
 class ProfileViewModel(val personId: String, private val records: PersonRecords) : ViewModel() {
@@ -25,6 +26,11 @@ class ProfileViewModel(val personId: String, private val records: PersonRecords)
     private var refreshJob: Job? = null
 
     init {
+        viewModelScope.launch {
+            records.observeRelativePortraitPaths(personId).collect { paths ->
+                mutableState.update { it.copy(relativePortraitPaths = paths) }
+            }
+        }
         viewModelScope.launch {
             records.observeProfile(personId).collect { profile ->
                 mutableState.update { it.copy(profile = profile, readingStore = false) }

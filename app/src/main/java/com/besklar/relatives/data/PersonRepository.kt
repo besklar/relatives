@@ -34,6 +34,7 @@ sealed interface RefreshResult {
 
 interface PersonRecords {
     fun observePeople(): Flow<PeopleSnapshot?>
+    fun observeRelativePortraitPaths(ownerId: String): Flow<Map<String, String>>
     fun observeProfile(id: String): Flow<PersonProfile?>
     suspend fun refreshPeople(): RefreshResult
     suspend fun refreshProfile(id: String): RefreshResult
@@ -46,6 +47,11 @@ class PersonRepository(
 ) : PersonRecords {
     private val dao = database.peopleDao()
     private val refreshMutex = Mutex()
+
+    override fun observeRelativePortraitPaths(ownerId: String): Flow<Map<String, String>> =
+        dao.observeRelativePortraitPaths(ownerId).map { rows -> rows.mapNotNull { row ->
+            row.portraitUrl?.let { row.targetId to it }
+        }.toMap() }
 
     override fun observePeople(): Flow<PeopleSnapshot?> = dao.observePeople().map { it?.toModel() }
     override fun observeProfile(id: String): Flow<PersonProfile?> = dao.observeProfile(id).map { it?.toModel() }
