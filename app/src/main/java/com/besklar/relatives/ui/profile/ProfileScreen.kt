@@ -1,5 +1,7 @@
 package com.besklar.relatives.ui.profile
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -12,9 +14,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.besklar.relatives.ui.portrait.PortraitViewer
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -33,6 +42,16 @@ fun ProfileScreen(state: ProfileState, onRefresh: () -> Unit, onBack: () -> Unit
     preview: ProfilePreview? = null,
     onOpenPreview: ((ProfilePreview, String) -> Unit)? = null,
     portraitModifier: @Composable (String, String) -> Modifier = { _, _ -> Modifier }) {
+    val personId = state.profile?.person?.id ?: preview?.id
+    var viewingPortrait by rememberSaveable(personId) { mutableStateOf(false) }
+    val profile = state.profile
+    val identity = profile?.person?.let {
+        ProfilePreview(it.id, it.name.fullName, it.lifespan(stringResource(R.string.living)), it.portraitUrl)
+    } ?: preview
+    BackHandler(enabled = viewingPortrait) { viewingPortrait = false }
+    if (viewingPortrait && identity != null) {
+        PortraitViewer(identity.portraitPath, identity.name, portraits) { viewingPortrait = false }
+    }
     Scaffold(topBar = {
         TopAppBar(title = { Text(stringResource(R.string.profile)) }, navigationIcon = {
             IconButton(onClick = onBack) {
@@ -42,18 +61,17 @@ fun ProfileScreen(state: ProfileState, onRefresh: () -> Unit, onBack: () -> Unit
     }) { padding ->
         PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = onRefresh,
             modifier = Modifier.fillMaxSize().padding(padding)) {
-            val profile = state.profile
-            val identity = profile?.person?.let {
-                ProfilePreview(it.id, it.name.fullName, it.lifespan(stringResource(R.string.living)), it.portraitUrl)
-            } ?: preview
             LazyColumn(Modifier.fillMaxSize().testTag("profile-content"),
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 if (identity != null) item(key = "identity") {
                     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        val openPortraitLabel = stringResource(R.string.open_portrait)
                         PersonPortrait(identity.portraitPath, portraits, state.portraitGeneration,
-                            portraitModifier(identity.id, "hero"), 160.dp)
+                            portraitModifier(identity.id, "hero").semantics { contentDescription = openPortraitLabel }.clickable(
+                                onClickLabel = openPortraitLabel,
+                                role = androidx.compose.ui.semantics.Role.Button) { viewingPortrait = true }, 160.dp)
                         Text(identity.name, style = MaterialTheme.typography.headlineMedium,
                             textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                         Text(identity.lifespan, style = MaterialTheme.typography.titleMedium,

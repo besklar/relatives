@@ -1,120 +1,152 @@
 # Relatives
 
-A native Android person browser for the FamilySearch take-home exercise.
+Native Android person browser for the FamilySearch take-home exercise. Built with Kotlin, Jetpack Compose and durable offline storage.
 
-## Features
+## Assignment coverage
 
-The list shows each person's portrait, full name, lifespan and birthplace in tappable lavender cards with circular avatars and chevrons. The app follows the system light/dark appearance. Saved data appears while the app refreshes; pull down or choose Refresh to retry. A failed refresh keeps saved content visible with a connection/service/data/storage message and the saved retrieval time. Successfully empty results, initial loading, uncached failures, and partially accepted records each have explicit presentations.
+| Requirement | Implementation |
+| --- | --- |
+| People list | Scrollable cards with portrait, full name, lifespan and birthplace. |
+| Own model types | Typed HTTP DTOs mapped to domain models; UI never reads raw JSON. |
+| Complete profile | Larger portrait, birth/death details, occupation, biography and relatives. |
+| Family navigation | Relative cards open profiles by ID; Back preserves the browsing stack. |
+| Offline after force-quit | Saved list, opened profiles and downloaded portraits survive process death. |
+| Queryable persistence | Room schema, transactions, migrations and primary-key profile lookup. |
+| Loading and failure states | Separate loading/empty/error states, Retry, and saved content during failed refreshes. |
 
-Tap a person to open the profile with a larger portrait, birth/death details, occupation, biography and relatives. Tap a relative card to open their profile. Relative portraits use paths already saved in profiles or summaries, preferring the profile; unknown paths show a placeholder without prefetching complete profiles. Missing occupation or biography is shown as “Not recorded”; living people have no invented death event. Previously opened profiles remain usable offline; a person known only from the list has no full saved profile until its endpoint is loaded.
+**Extras:** lavender light/dark themes, relative portraits, shared portrait transitions, and a fullscreen viewer with pinch zoom, panning, X and Android Back.
 
 ## Build and run
 
-Use Android Studio Quail 4 (2026.1.4 Patch 1) or a compatible installation, JDK 21, and Android SDK platform 36. The project pins Gradle 8.13, Android Gradle Plugin 8.12.0, and Kotlin 2.2.10. Java/Kotlin compilation targets JVM 17. The minimum device version is Android 8.0 (API 26).
+### Toolchain
 
-Open the repository in Android Studio, select JDK 21 as the Gradle JVM, let Gradle sync, and run the `app` configuration on a phone or emulator. Android Studio's current bundled JDK may be newer; explicitly select JDK 21.
+| Tool | Version used |
+| --- | --- |
+| Android Studio | Quail 4, 2026.1.4 Patch 1 |
+| Build JDK | 21.0.11; explicitly select JDK 21 as the Gradle JVM |
+| Gradle / Android Gradle Plugin | 8.13 / 8.12.0 |
+| Kotlin / JVM target | 2.2.10 / 17 |
+| Android SDK | Compile/target 36; minimum device API 26 |
 
-For terminal builds, set `JAVA_HOME` to your JDK 21 installation and `ANDROID_HOME` to your Android SDK directory, then run:
+1. Open the repository in Android Studio, select **JDK 21**, and sync Gradle.
+2. Start an emulator or connect a phone.
+3. Run the **app** configuration.
+
+For terminal builds, set `JAVA_HOME` to your JDK 21 installation and `ANDROID_HOME` to your Android SDK directory:
 
 ```shell
-./gradlew assembleDebug lintDebug
-```
-
-Install the debug APK with an attached phone or running emulator:
-
-```shell
+./gradlew assembleDebug
 "$ANDROID_HOME/platform-tools/adb" install -r app/build/outputs/apk/debug/app-debug.apk
 "$ANDROID_HOME/platform-tools/adb" shell am start -n com.besklar.relatives/.MainActivity
 ```
 
-The Gradle wrapper is committed. No API keys, credentials, or source edits are required. Android Studio may generate an ignored `local.properties`; terminal builds use `ANDROID_HOME` without that file.
+- The Gradle wrapper is committed; no API keys or source edits are required.
+- Android Studio can generate an ignored `local.properties`; terminal builds use `ANDROID_HOME`.
+- The service is `https://fs-records-sample.vercel.app/` and requires no authentication.
 
-## Approach
+## Architecture and decisions
 
-Kotlin and Jetpack Compose suit the native Android role. One application module and manual dependency injection keep the two-screen application small and explainable. An application-scoped container owns the shared HTTP client, database, repository and portrait store. The list data flow is Retrofit → repository → Room → Flow → ViewModel StateFlow → Compose. Room holds the last successfully saved records so refresh failures do not discard previously loaded data.
+### Unidirectional data flow
 
-Screen ViewModels observe disk-backed models and refresh once at creation. They track the initial store read separately from an absent snapshot, avoid duplicate refresh requests, and survive activity recreation. Compose collects immutable StateFlow with lifecycle awareness. A small repository interface enables deterministic ViewModel tests without a live database or network.
+```mermaid
+flowchart LR
+    HTTP[Retrofit / OkHttp] -->|Validated models| Repository
+    Repository -->|Transactional writes| Room[(Room database)]
+    Room -->|Flow| ViewModel
+    ViewModel -->|StateFlow| UI[Compose UI]
+```
 
-Navigation Compose uses typed person-ID routes, decoded through the navigation entry's SavedStateHandle at the ViewModel factory boundary. Different person IDs get separate entries and ViewModels, even during A → B → A browsing. A tap to the currently displayed person does nothing. Returning to the list retains its ViewModel and scroll state. Popping an entry cancels its ViewModel work; entries still on the back stack may finish loading and safely populate Room. App-bar and Android Back follow the normal navigation stack. Taps during entry transitions are ignored to avoid stacking duplicate destinations.
+- **Refresh actions:** UI → ViewModel → repository → service. Results enter Room before appearing in the UI.
+- **Native Kotlin/Compose:** fits the Android role and provides standard UI, lifecycle and gesture tools.
+- **One module, manual DI:** an application container shares the client, repository, database and portrait store without a DI framework.
+- **Entry-owned ViewModels:** typed ID routes support A → B → A; Back retains earlier screens and cancels popped entries' work.
+- **Cancellation:** network/decode/storage work runs off the main thread. One cancellable mutex serializes refreshes; networking finishes before database transactions begin.
 
-A shared portrait transition connects the tapped list/relative card to the profile header over approximately 300 ms, with a fade for surrounding content and unmatched Back transitions. Keys include the source navigation entry and row identity so repeated family routes do not share the wrong portrait. Navigation carries only a display hint (ID, name, lifespan and portrait path); the identity remains visible while full details load or fail, and the hint never becomes a saved full profile. Compose uses the system animation duration scale. The pinned Compose shared-transition API requires an opt-in localized to navigation.
+### Persistence and offline behavior
 
-### Records and malformed data
+- **Four Room tables:** list metadata, ordered summaries, complete profiles and ordered relatives. Exported schemas and a tested, non-destructive 1→2 migration are committed.
+- **Primary-key lookup:** fetch one saved profile by ID without reading every profile into memory.
+- **Independent snapshots:** duplicate summary/profile fields intentionally so list refreshes cannot overwrite older profile details or delete opened profiles.
+- **Explicit empty state:** list metadata distinguishes a successful empty response from a list that has never loaded.
+- **Offline boundary:** a loaded summary does not imply a loaded full profile. Unopened profiles explain that no saved profile is available.
+- **At 100,000 people:** first add server pagination, then Paging 3, indexed queries, incremental imports and bounded image storage. The current service returns all 16 people at once.
 
-The list envelope is decoded first, with each person decoded and validated independently into our Kotlin models. Missing required fields, wrong types, invalid IDs and unusable names discard that person while the remaining records continue. Duplicate IDs keep the first valid record. Unknown JSON fields are ignored. The server's count is informational; the app uses the accepted record count. A skipped-record count is saved with the list so the UI can report partial results.
+### Malformed records
 
-A genuinely empty list is a successful result. Invalid overall JSON, an invalid envelope, or a nonempty array with no valid people is a failed refresh that preserves the previous saved list. An individual profile must have valid core data and match the requested ID before it replaces the saved profile. Relative entries are decoded independently; invalid entries and duplicate ID/relationship links are skipped and counted. Even if every relative is invalid, a valid profile core remains usable with an explicit skipped count. Unknown relationship labels are preserved. Display dates such as “about 1838” stay unchanged; integer years are retained separately. Death may be null for a living person, and occupation may be null. Sources are ignored because they are not a requested display feature.
+| Response condition | Behavior |
+| --- | --- |
+| Bad person or duplicate ID | Skip/count it; retain other valid people. First valid duplicate wins. |
+| Empty people array | Save a successful empty list. |
+| Invalid envelope or nonempty all-invalid list | Fail refresh; preserve the previous saved list. |
+| Invalid profile core or mismatched ID | Preserve the previous profile. |
+| Bad or duplicate relative links | Skip/count them; retain the valid profile core. |
 
-### Queryable persistence
+- Unknown JSON fields are ignored; server counts are informational.
+- Display dates such as “about 1838” stay unchanged; integer years are stored separately.
+- Living people have no invented death event. Missing occupation/biography shows **Not recorded**.
+- Unknown relationship labels are preserved. Sources are ignored because their display was not requested.
 
-Room uses four schema-defined tables: list metadata, ordered person summaries, complete profiles, and ordered relatives. List snapshots and profiles deliberately duplicate common fields: a new list response cannot mix newly fetched summary fields with older profile details or delete opened profiles. Relative targets need not already have a stored full profile.
+### Portraits and viewing
 
-List and profile replacements use database transactions. Transactional relation queries emit consistent snapshots, and a profile lookup uses its primary-key ID without loading every profile. List metadata distinguishes an empty successful response from a list that has never loaded. Version-one and version-two schemas are committed under `app/schemas`; a tested, non-destructive 1→2 migration adds the profile's skipped-relative count with default zero while retaining stored records.
+- **Durable files:** service paths resolve to SHA-256 filenames in app-private `filesDir/portraits`; disk is checked before the network.
+- **Safe completion:** same-origin downloads use temporary files, an 8 MB limit, image validation and rename after completion. Failure/cancellation cleans up temporary files.
+- **Memory reuse:** an 8 MB bitmap LRU avoids portrait blanking during navigation; eviction never recycles images still held by screens.
+- **Relative photos:** Room joins prefer a saved profile path, then its summary path. Unknown images use placeholders; no extra profile prefetch.
+- **Transitions:** approximately 300 ms; keys identify the source entry/row. A display-only identity preview stays visible during loading/failure and never becomes a saved profile. Shared-transition API opt-in is isolated to navigation; system animation scale is respected.
+- **Fullscreen:** show the complete image, pinch 1×–4×, and pan within image bounds. X/Back closes only the viewer. Rotation resets zoom; larger decoding is capped at 2048 pixels and reuses saved files offline.
 
-Network and database work run asynchronously off the main thread. Refreshes are serialized through one cancellable mutex for this small dataset; networking finishes before the database transaction starts. Cancellation propagates rather than becoming a user-visible failure. Expected HTTP, transport, decoding, validation and SQLite failures have explicit result types; transactions preserve prior records if writes fail.
-
-### Portrait files
-
-Room retains the service portrait path. The portrait store resolves it against the service URL and derives a SHA-256 filename, avoiding machine-specific paths in the database. Images live in app-private `filesDir/portraits`, rather than the OS-evictable cache directory. A saved file is checked before requesting network data.
-
-Downloads use the shared OkHttp client, a temporary file, an 8 MB limit, image-bound validation, and a same-directory rename after completion. Failed or canceled downloads remove temporary files before returning failure. Portrait failures do not invalidate person records. Both screens load portraits on demand, decode them at display size off the main thread, and show a placeholder on failure. Leaving composition cancels the image request; a successful records refresh also retries unavailable portraits. An 8 MB LRU bitmap cache supplies the already displayed decode immediately during navigation; the larger decode replaces it after the shared transition. Eviction drops cache references without recycling images still held by a screen. Cache contents are expendable: app-private files provide offline persistence. No separate image library is used.
-
-Saved portraits have no automatic eviction or revalidation when their URL is unchanged. That is a deliberate simplification for 16 records; app data removal clears them. A production version would need a bounded storage policy and image versioning/revalidation.
-
-### At 100,000 people
-
-The service would first need server pagination; its current endpoint returns the entire list. I would then use Paging 3 with indexed Room queries, incremental response import, and bounded image storage. Reading and decoding all 100,000 records into memory would be inappropriate. Those mechanisms add little value for the supplied 16-person service and are not implemented here.
-
-## Dependencies
-
-- AndroidX Activity Compose (1.10.1): hosts Compose in an Android activity and supports edge-to-edge layout.
-- Compose UI, Animation and Material 3 (BOM 2025.08.01): declarative UI, native shared-element transitions and standard Android components.
-- AndroidX Lifecycle Compose and ViewModel Compose (2.9.2): lifecycle-aware state collection and screen ViewModels.
-- Navigation Compose (2.9.3): typed ID-based routes, navigation-entry state ownership and standard Back handling.
-- Android Gradle Plugin and Kotlin Compose compiler plugin: compile and package the Android application; the wrapper pins a reproducible Gradle version.
-- Room runtime/ktx/compiler (2.7.2) and KSP (2.2.10-2.0.2): schema-defined queryable storage, generated DAOs, transactions and observable queries.
-- Retrofit and its Kotlin serialization converter (3.0.0), Kotlin serialization JSON (1.9.0), and the Kotlin serialization compiler plugin: typed HTTP requests and generated DTO decoding, with per-record recovery at the boundary.
-- Kotlin coroutines Android (1.10.2): cancellable asynchronous work, mutexes and flows.
-- OkHttp (5.1.0): shared transport, timeouts and cancellable portrait streaming.
-- JUnit (4.13.2), coroutines-test (1.10.2), and MockWebServer (5.1.0): JVM assertions and deterministic local HTTP/failure tests without relying on the live service.
-- AndroidX Test core/runner (1.7.0) and extension JUnit (1.3.0): instrumentation on real Android SQLite and image decoding, including persistence across store recreation.
-- Room testing (2.7.2): validate the migration against exported schemas and verify previously saved data remains readable.
-- Compose UI test JUnit and its debug test manifest (versions selected by the Compose BOM): deterministic screen assertions, retry actions, portrait reload behavior and family navigation with failed refreshes.
-
-## Verification and limitations
-
-The base revision passed `assembleDebug`, `lintDebug` and all 28 JVM tests from a fresh Git clone with JDK 21.0.11 and SDK 36, using `ANDROID_HOME` without `local.properties` or private planning files. The resulting APK was installed on an API 36 emulator.
-
-Run the automated checks with a running emulator or connected phone:
+## Tests and verification
 
 ```shell
 ./gradlew testDebugUnitTest connectedDebugAndroidTest lintDebug assembleDebug
 ```
 
-Tests concentrate on boundaries where failures could lose saved data or show the wrong person: actual HTTP decoding, real SQLite transactions/migration, file completion/cancellation, and navigation state. These provide more value than testing generated DTO getters or chasing a coverage percentage.
+A running emulator or connected device is required for instrumentation.
 
-The tests cover the actual Retrofit boundary, mixed valid/invalid records, duplicate IDs, imprecise dates, living/null death, null occupation, failed refresh preservation, successful-empty versus uncached state, list refresh preserving profiles, relative replacement, SQLite rollback, cancellation, and persistence after database close/reopen. Portrait tests cover disk reuse without network, concurrent requests, invalid/oversized/interrupted responses, cancellation cleanup, and actual Android image decoding after store recreation. Debug builds permit cleartext HTTP only to localhost/127.0.0.1 so instrumentation can use MockWebServer; the service uses HTTPS.
+- **Automated results:** **34 JVM + 38 Android tests pass** on API 36; `assembleDebug` and `lintDebug` pass. Lint reports zero errors and 19 unsuppressed tool/dependency/backup warnings.
+- **Tests earn their keep at failure boundaries:** HTTP decoding, partial-record recovery, SQLite rollback/migration/reopen, cancellation, image corruption/limits/cache reuse, ViewModel states, navigation, rendered transition midpoints and fullscreen gestures.
+- **Live offline check:** load all 16 people and browse Hannah → Bartholomew → Amos; force-stop, enable airplane mode, disable Wi-Fi, and repeat the journey. Saved text and portraits remain available. An unopened relative shows an explicit uncached failure.
+- **Fullscreen live checks:** saved portrait in airplane mode, X/Back dismissal, rotation with the viewer open and 150% text. Screenshots inspected; pinch and pan verified by multi-touch instrumentation.
+- **Other live checks:** first-launch offline, light/dark appearance, 150% text, landscape, Android Back, repeated taps and disabled animations. Emulator settings restored afterward.
+- **Clean checkout:** the base revision built and ran from a fresh clone with `ANDROID_HOME`, no `local.properties`, and no private planning files.
+- **Test transport:** debug builds allow HTTP only to localhost/127.0.0.1 for MockWebServer; the records service uses HTTPS.
 
-The current run passed all 29 JVM tests and 33 Android instrumentation tests on API 36, along with `lintDebug` and `assembleDebug`. Checks cover list/profile ViewModel states, ID-specific refresh, duplicate request prevention, cancellation, required screen text, retry actions, partial-result disclosure, portrait decoding/retry, version-one migration, and cached A → B → A navigation followed by Back to the retained list. New checks exercise relative-path priority/missing targets/persistence, previews during pending or failed fetches, Back cancellation, bitmap reuse/upgrade/eviction, and rendered portrait growth/shrinkage at animation midpoints. Lint has zero errors and 19 unsuppressed warnings about newer tool/dependency versions and Android backup configuration.
+## Dependencies
 
-The list-only live check loaded all 16 people and saved all 16 portraits through scrolling. After force-stop, airplane mode and disabled Wi-Fi, relaunch and scrolling still displayed saved text and portraits with failed-refresh feedback; portrait file hashes were unchanged.
-
-The complete live check opened Hannah Ainsley, her relative Bartholomew Whitcomb, and his relative Amos Whitcomb. After force-stop and airplane-mode relaunch with Wi-Fi disabled, the list and all three profiles remained available through the same relative taps, including their portraits, birth/death details, occupations and biographies. Opening Ezra Whitcomb, whose full profile had not been loaded, showed “No saved profile is available” with Retry and Back. Original emulator network settings were restored afterward.
-
-A fresh app state launched with airplane mode, Wi-Fi and mobile data disabled showed a connection explanation and Try again. After restoring saved data, a loaded profile survived rotation; birth details remained reachable in landscape. At 150% font scale, places and biography wrapped, Refresh and relative taps remained usable, and Android Back returned through the family stack to the list with scroll position retained. Font, rotation and network settings were restored.
-
-The polished UI was checked in light and dark themes, at 150% font scale and in landscape. The three-profile offline family journey still passed with portraits on relative cards. An unopened relative retained its name/portrait preview with an explicit uncached failure. With system animation scales set to zero, navigation and Back still worked. Original appearance, animation, font, rotation and network settings were restored.
-
-Measured implementation and verification intervals total approximately 65 minutes: three minutes for the foundation, eight for persistence, eight for the list, fifteen for profiles/navigation, six for final verification/documentation, and approximately twenty-five for UI/UX polish and additional checks. Collaborative planning and author review were not timed and are additional to those intervals; this is not a claim of total personal effort. Wall time from the first commit through the completed polishing phase was approximately 1 hour 50 minutes, including those discussions and review pauses; initial planning before that commit was not timed.
-
-## Development assistance
-
-AI assistance was used for planning, implementation, and verification. Technical decisions are reviewed with the author, who must be able to explain and defend the submitted code.
+| Package(s) | Why included |
+| --- | --- |
+| Activity Compose 1.10.1 | Android activity host and edge-to-edge layout. |
+| Compose UI, Animation, Material 3; BOM 2025.08.01 | Declarative screens, gestures, shared transitions and standard components. |
+| Lifecycle runtime-compose / viewmodel-compose 2.9.2 | Lifecycle-aware collection and screen state ownership. |
+| Navigation Compose 2.9.3 | Typed routes, entry state and Back handling. |
+| Room runtime / ktx / compiler 2.7.2; KSP 2.2.10-2.0.2 | Queryable storage, transactions, observable queries and generated DAOs. |
+| Retrofit / serialization converter 3.0.0; serialization JSON 1.9.0 | Typed HTTP transport and DTO decoding. |
+| Coroutines Android 1.10.2 | Cancellable asynchronous work, flows and mutexes. |
+| OkHttp 5.1.0 | Shared transport, timeouts and streamed portraits. |
+| AGP 8.12.0; Kotlin Android / Compose / serialization plugins 2.2.10 | Android packaging and generated Kotlin/Compose/serialization code. |
+| JUnit 4.13.2; coroutines-test 1.10.2; MockWebServer 5.1.0 | Assertions, controlled coroutine scheduling and deterministic HTTP failures. |
+| AndroidX Test core / runner 1.7.0; extension JUnit 1.3.0 | Instrumentation against Android SQLite, images and input. |
+| Room testing 2.7.2 | Validate migrations against exported schemas. |
+| Compose UI test JUnit / debug test manifest; Compose BOM | Screen, gesture and navigation tests. |
 
 ## Known gaps and another day
 
-The required list, profiles, family navigation, typed models, queryable persistence and explicit states are implemented. Offline availability covers successfully saved records and successfully downloaded portraits; opening an uncached profile offline explains that no saved profile is available. Portrait downloads are separate from record transactions, so a canceled or failed image request can leave a placeholder even when the text is saved. Refresh happens on screen creation or user request; there is no background synchronization.
+### Current tradeoffs
 
-The interface uses app-owned lavender light/dark palettes, card layouts, separated profile sections and a shared portrait transition, built from standard Material components. There is no search, family tree, source viewer, full-screen portrait viewer, analytics or release signing. Verification used an API 36 emulator; minimum API 26 and a physical device have not been exercised. Lint warnings are reported above rather than suppressed.
+- Record and portrait saves are separate: text can be available while an image remains a placeholder.
+- Saved image URLs have no automatic revalidation or disk eviction; app data removal clears them.
+- Refresh runs on screen creation or request; no background sync or server pagination.
+- No search, family tree, source viewer, analytics or release signing.
+- Verification used API 36; a physical device, API 26 and a full TalkBack walkthrough remain untested.
 
-With another day I would prioritize accessibility/TalkBack and device coverage, exercise more devices and text sizes, and add a bounded portrait retention/revalidation policy. For a larger service I would implement server pagination and Paging 3 before expanding features. I would replace the single refresh mutex with per-resource coordination if concurrent fetches become important.
+### With another day
+
+1. Broaden accessibility, device and text-size testing.
+2. Add bounded portrait retention and image revalidation/versioning.
+3. For a larger service, add pagination/Paging 3 and per-resource refresh coordination.
+
+## Time and development assistance
+
+- **Measured implementation/verification:** Approximately 78 minutes across seven phases, including about 13 minutes for the fullscreen viewer and README cleanup.
+- **Total elapsed project time:** approximately 2 hours 24 minutes, from about 6:00 p.m. to 8:24 p.m. on October 8, 2026 (America/Denver), including planning and review pauses. The first commit was at 6:08 p.m.
+- **AI assistance:** used for planning, implementation and verification. The author reviews decisions and must be able to explain and defend the code.
