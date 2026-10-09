@@ -1,5 +1,7 @@
 # Relatives
 
+[![Android CI](https://github.com/besklar/relatives/actions/workflows/android-ci.yml/badge.svg?branch=main)](https://github.com/besklar/relatives/actions/workflows/android-ci.yml)
+
 Native Android person browser for the FamilySearch take-home exercise. Built with Kotlin, Jetpack Compose and durable offline storage.
 
 ## Assignment coverage
@@ -102,6 +104,8 @@ flowchart LR
 ```
 
 A running emulator or connected device is required for instrumentation.
+
+**CI:** GitHub Actions runs the same checks on pull requests and pushes to `main`, using JDK 21 and an API 36 emulator with animations enabled. The badge reflects the latest main run; each run summarizes actual test counts and saves test/lint reports for seven days.
 
 - **Automated results:** **34 JVM + 38 Android tests pass** on API 36; `assembleDebug` and `lintDebug` pass. Lint reports zero errors and 19 unsuppressed tool/dependency/backup warnings.
 - **Tests earn their keep at failure boundaries:** HTTP decoding, partial-record recovery, SQLite rollback/migration/reopen, cancellation, image corruption/limits/cache reuse, ViewModel states, navigation, rendered transition midpoints and fullscreen gestures.
