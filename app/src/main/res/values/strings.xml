@@ -21,4 +21,25 @@
     </plurals>
     <string name="living">Living</string>
     <string name="portrait_placeholder">?</string>
+    <string name="profile">Profile</string>
+    <string name="back">Back</string>
+    <string name="loading_profile">Loading profile…</string>
+    <string name="could_not_load_profile">Couldn’t load profile</string>
+    <string name="no_saved_profile">No saved profile is available.</string>
+    <string name="birth">Birth</string>
+    <string name="death">Death</string>
+    <string name="occupation">Occupation</string>
+    <string name="biography">Biography</string>
+    <string name="relatives">Relatives</string>
+    <string name="no_relatives">No relatives recorded.</string>
+    <string name="not_recorded">Not recorded</string>
+    <string name="father">Father</string>
+    <string name="mother">Mother</string>
+    <string name="spouse">Spouse</string>
+    <string name="son">Son</string>
+    <string name="daughter">Daughter</string>
+    <plurals name="skipped_relatives">
+        <item quantity="one">%1$d relative couldn’t be read and was skipped.</item>
+        <item quantity="other">%1$d relatives couldn’t be read and were skipped.</item>
+    </plurals>
 </resources>
