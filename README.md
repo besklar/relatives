@@ -2,11 +2,7 @@
 
 A native Android person browser for the FamilySearch take-home exercise.
 
-## Development status
-
-The project is being built in small, independently verified changes. The planned sequence is Android setup, typed records and persistence, the people list, profiles and relative navigation, then offline verification and final documentation.
-
-The people list, profiles, relative navigation, records persistence and portrait storage are implemented and tested. Final clean-checkout verification and documentation review remain.
+## Features
 
 The list shows each person's portrait, full name, lifespan and birthplace. Saved data appears while the app refreshes; pull down or choose Refresh to retry. A failed refresh keeps saved content visible with a connection/service/data/storage message and the saved retrieval time. Successfully empty results, initial loading, uncached failures, and partially accepted records each have explicit presentations.
 
@@ -69,12 +65,12 @@ The service would first need server pagination; its current endpoint returns the
 
 ## Dependencies
 
-- AndroidX Activity Compose: hosts Compose in an Android activity and supports edge-to-edge layout.
+- AndroidX Activity Compose (1.10.1): hosts Compose in an Android activity and supports edge-to-edge layout.
 - Compose UI and Material 3 (BOM 2025.08.01): declarative UI and standard Android components.
 - AndroidX Lifecycle Compose and ViewModel Compose (2.9.2): lifecycle-aware state collection and screen ViewModels.
 - Navigation Compose (2.9.3): typed ID-based routes, navigation-entry state ownership and standard Back handling.
 - Android Gradle Plugin and Kotlin Compose compiler plugin: compile and package the Android application; the wrapper pins a reproducible Gradle version.
-- Room runtime/ktx and KSP (2.7.2 and 2.2.10-2.0.2): schema-defined queryable storage, generated DAOs, transactions and observable queries.
+- Room runtime/ktx/compiler (2.7.2) and KSP (2.2.10-2.0.2): schema-defined queryable storage, generated DAOs, transactions and observable queries.
 - Retrofit and its Kotlin serialization converter (3.0.0), Kotlin serialization JSON (1.9.0), and the Kotlin serialization compiler plugin: typed HTTP requests and generated DTO decoding, with per-record recovery at the boundary.
 - Kotlin coroutines Android (1.10.2): cancellable asynchronous work, mutexes and flows.
 - OkHttp (5.1.0): shared transport, timeouts and cancellable portrait streaming.
@@ -85,13 +81,15 @@ The service would first need server pagination; its current endpoint returns the
 
 ## Verification and limitations
 
-The foundation passed `assembleDebug` and `lintDebug` with JDK 21.0.11 and SDK 36, and a fresh Git clone built with `ANDROID_HOME` and no `local.properties`. The app was installed and launched on an Android API 36 emulator, and the visible screen and app name were checked.
+The completed app passed `assembleDebug`, `lintDebug` and all 28 JVM tests from a fresh Git clone with JDK 21.0.11 and SDK 36, using `ANDROID_HOME` without `local.properties` or private planning files. The resulting APK was installed on an API 36 emulator.
 
-Run the data-layer checks with a running emulator or connected phone:
+Run the automated checks with a running emulator or connected phone:
 
 ```shell
 ./gradlew testDebugUnitTest connectedDebugAndroidTest lintDebug assembleDebug
 ```
+
+Tests concentrate on boundaries where failures could lose saved data or show the wrong person: actual HTTP decoding, real SQLite transactions/migration, file completion/cancellation, and navigation state. These provide more value than testing generated DTO getters or chasing a coverage percentage.
 
 The tests cover the actual Retrofit boundary, mixed valid/invalid records, duplicate IDs, imprecise dates, living/null death, null occupation, failed refresh preservation, successful-empty versus uncached state, list refresh preserving profiles, relative replacement, SQLite rollback, cancellation, and persistence after database close/reopen. Portrait tests cover disk reuse without network, concurrent requests, invalid/oversized/interrupted responses, cancellation cleanup, and actual Android image decoding after store recreation. Debug builds permit cleartext HTTP only to localhost/127.0.0.1 so instrumentation can use MockWebServer; the service uses HTTPS.
 
@@ -99,10 +97,20 @@ The current run passed all 28 JVM tests and 27 Android instrumentation tests on 
 
 The list-only live check loaded all 16 people and saved all 16 portraits through scrolling. After force-stop, airplane mode and disabled Wi-Fi, relaunch and scrolling still displayed saved text and portraits with failed-refresh feedback; portrait file hashes were unchanged.
 
-The complete live check opened Hannah Ainsley, her relative Bartholomew Whitcomb, and his relative Amos Whitcomb. After force-stop and airplane-mode relaunch with Wi-Fi disabled, the list and all three profiles remained available through the same relative taps, including their portraits, birth/death details, occupations and biographies. Opening Ezra Whitcomb, whose full profile had not been loaded, showed “No saved profile is available” with Retry and Back. Original emulator network settings were restored afterward. Final documentation review will add the remaining handoff notes.
+The complete live check opened Hannah Ainsley, her relative Bartholomew Whitcomb, and his relative Amos Whitcomb. After force-stop and airplane-mode relaunch with Wi-Fi disabled, the list and all three profiles remained available through the same relative taps, including their portraits, birth/death details, occupations and biographies. Opening Ezra Whitcomb, whose full profile had not been loaded, showed “No saved profile is available” with Retry and Back. Original emulator network settings were restored afterward.
 
-Time spent so far: approximately three minutes implementing/verifying the Android foundation, eight minutes for the data layer, eight minutes for the list UI, and fourteen minutes for profiles/navigation, plus collaborative planning that was not timed. This will be updated after final verification.
+A fresh app state launched with airplane mode, Wi-Fi and mobile data disabled showed a connection explanation and Try again. After restoring saved data, a loaded profile survived rotation; birth details remained reachable in landscape. At 150% font scale, places and biography wrapped, Refresh and relative taps remained usable, and Android Back returned through the family stack to the list with scroll position retained. Font, rotation and network settings were restored.
+
+Measured implementation and verification intervals total approximately 40 minutes: three minutes for the foundation, eight for persistence, eight for the list, fifteen for profiles/navigation, and approximately six for final verification/documentation. Collaborative planning and author review were not timed and are additional to those intervals; this is not a claim of total personal effort.
 
 ## Development assistance
 
-AI assistance is being used for planning, implementation, and verification. Technical decisions are reviewed with the author, who must be able to explain and defend the submitted code.
+AI assistance was used for planning, implementation, and verification. Technical decisions are reviewed with the author, who must be able to explain and defend the submitted code.
+
+## Known gaps and another day
+
+The required list, profiles, family navigation, typed models, queryable persistence and explicit states are implemented. Offline availability covers successfully saved records and successfully downloaded portraits; opening an uncached profile offline explains that no saved profile is available. Portrait downloads are separate from record transactions, so a canceled or failed image request can leave a placeholder even when the text is saved. Refresh happens on screen creation or user request; there is no background synchronization.
+
+The interface uses standard Material components with limited visual customization. There is no search, family tree, source viewer, full-screen portrait viewer, analytics or release signing. Verification used an API 36 emulator; minimum API 26 and a physical device have not been exercised. Lint warnings are reported above rather than suppressed.
+
+With another day I would prioritize accessibility/TalkBack and device coverage, refine the visual hierarchy and touch feedback, and add a bounded portrait retention/revalidation policy. For a larger service I would implement server pagination and Paging 3 before expanding features. I would replace the single refresh mutex with per-resource coordination if concurrent fetches become important.
