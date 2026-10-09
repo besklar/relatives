@@ -6,7 +6,9 @@ A native Android person browser for the FamilySearch take-home exercise.
 
 The project is being built in small, independently verified changes. The planned sequence is Android setup, typed records and persistence, the people list, profiles and relative navigation, then offline verification and final documentation.
 
-The records and portrait persistence layers are implemented and tested. The current screen is still the Android foundation; list and profile UI integration comes next.
+The people list, records persistence and portrait storage are implemented and tested. Profile screens and relative navigation are the next feature slice.
+
+The list shows each person's portrait, full name, lifespan and birthplace. Saved data appears while the app refreshes; pull down or choose Refresh to retry. A failed refresh keeps saved content visible with a connection/service/data/storage message and the saved retrieval time. Successfully empty results, initial loading, uncached failures, and partially accepted records each have explicit presentations.
 
 ## Build and run
 
@@ -31,7 +33,9 @@ The Gradle wrapper is committed. No API keys, credentials, or source edits are r
 
 ## Approach
 
-Kotlin and Jetpack Compose suit the native Android role. One application module and manual dependency injection keep the two-screen application small and explainable. An application-scoped container owns the shared HTTP client, database, repository and portrait store. The data flow is Retrofit → repository → Room → Flow → ViewModel StateFlow → Compose; the screen integration is the next step. Room holds the last successfully saved records so refresh failures do not discard previously loaded data.
+Kotlin and Jetpack Compose suit the native Android role. One application module and manual dependency injection keep the two-screen application small and explainable. An application-scoped container owns the shared HTTP client, database, repository and portrait store. The list data flow is Retrofit → repository → Room → Flow → ViewModel StateFlow → Compose. Room holds the last successfully saved records so refresh failures do not discard previously loaded data.
+
+The list ViewModel observes disk-backed models and refreshes once at creation. It tracks the initial store read separately from an absent snapshot, avoids duplicate refresh requests, and survives activity recreation. Compose collects its immutable StateFlow with lifecycle awareness. A small repository interface enables deterministic ViewModel tests without a live database or network.
 
 ### Records and malformed data
 
@@ -51,7 +55,7 @@ Network and database work run asynchronously off the main thread. Refreshes are 
 
 Room retains the service portrait path. The portrait store resolves it against the service URL and derives a SHA-256 filename, avoiding machine-specific paths in the database. Images live in app-private `filesDir/portraits`, rather than the OS-evictable cache directory. A saved file is checked before requesting network data.
 
-Downloads use the shared OkHttp client, a temporary file, an 8 MB limit, image-bound validation, and a same-directory rename after completion. Failed or canceled downloads remove temporary files. Portrait failures do not invalidate person records. Screen integration will load portraits on demand and decode them at display size off the main thread.
+Downloads use the shared OkHttp client, a temporary file, an 8 MB limit, image-bound validation, and a same-directory rename after completion. Failed or canceled downloads remove temporary files before returning failure. Portrait failures do not invalidate person records. The list loads portraits on demand, decodes them at display size off the main thread, and shows a placeholder on failure. Leaving composition cancels a row's image request; a successful records refresh also retries unavailable portraits. No extra image library or memory bitmap cache is needed for this small dataset.
 
 Saved portraits have no automatic eviction or revalidation when their URL is unchanged. That is a deliberate simplification for 16 records; app data removal clears them. A production version would need a bounded storage policy and image versioning/revalidation.
 
@@ -71,6 +75,7 @@ The service would first need server pagination; its current endpoint returns the
 - OkHttp (5.1.0): shared transport, timeouts and cancellable portrait streaming.
 - JUnit (4.13.2), coroutines-test (1.10.2), and MockWebServer (5.1.0): JVM assertions and deterministic local HTTP/failure tests without relying on the live service.
 - AndroidX Test core/runner (1.7.0) and extension JUnit (1.3.0): instrumentation on real Android SQLite and image decoding, including persistence across store recreation. Room's runtime APIs suffice for these tests; no migration-test library is needed for schema version one.
+- Compose UI test JUnit and its debug test manifest (versions selected by the Compose BOM): deterministic list-screen assertions, retry actions and portrait reload behavior.
 
 ## Verification and limitations
 
@@ -84,11 +89,11 @@ Run the data-layer checks with a running emulator or connected phone:
 
 The tests cover the actual Retrofit boundary, mixed valid/invalid records, duplicate IDs, imprecise dates, living/null death, null occupation, failed refresh preservation, successful-empty versus uncached state, list refresh preserving profiles, relative replacement, SQLite rollback, cancellation, and persistence after database close/reopen. Portrait tests cover disk reuse without network, concurrent requests, invalid/oversized/interrupted responses, cancellation cleanup, and actual Android image decoding after store recreation. Debug builds permit cleartext HTTP only to localhost/127.0.0.1 so instrumentation can use MockWebServer; the service uses HTTPS.
 
-The data-layer run passed all 14 JVM tests and 11 Android instrumentation tests on API 36, along with `lintDebug` and `assembleDebug`. Lint has zero errors and 18 unsuppressed warnings about newer tool/dependency versions and Android backup configuration.
+The current run passed all 22 JVM tests and 18 Android instrumentation tests on API 36, along with `lintDebug` and `assembleDebug`. Added checks cover list ViewModel states, duplicate refresh prevention, cancellation, required row text, retry actions, partial-result disclosure, retrying unavailable portraits, and sampled display decoding while retaining the original image. Lint has zero errors and 18 unsuppressed warnings about newer tool/dependency versions and Android backup configuration.
 
-Full force-quit/airplane-mode UI verification is pending until the list and profile screens are implemented. Final documentation will also describe what another day would enable.
+On the live-service emulator run, all 16 people loaded and scrolling saved all 16 portraits. After force-stopping the app, enabling airplane mode and disabling Wi-Fi, relaunching still displayed the list and portraits. The list showed failed-refresh feedback with saved data, including the living-person lifespan when scrolled. Portrait file hashes were unchanged. Original network settings were restored afterward. Profile/relative offline navigation remains pending until those screens are implemented. Final documentation will also describe what another day would enable.
 
-Time spent so far: approximately three minutes implementing/verifying the Android foundation and eight minutes implementing/verifying the data layer, plus collaborative planning that was not timed. This will be updated as features are completed.
+Time spent so far: approximately three minutes implementing/verifying the Android foundation, eight minutes for the data layer, and seven minutes for the list UI, plus collaborative planning that was not timed. This will be updated as features are completed.
 
 ## Development assistance
 
