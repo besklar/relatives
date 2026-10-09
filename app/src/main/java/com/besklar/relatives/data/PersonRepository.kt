@@ -32,18 +32,25 @@ sealed interface RefreshResult {
     data object StorageFailure : RefreshResult
 }
 
+interface PersonRecords {
+    fun observePeople(): Flow<PeopleSnapshot?>
+    fun observeProfile(id: String): Flow<PersonProfile?>
+    suspend fun refreshPeople(): RefreshResult
+    suspend fun refreshProfile(id: String): RefreshResult
+}
+
 class PersonRepository(
     private val database: PeopleDatabase,
     private val service: RecordsService,
     private val clock: Clock = Clock.systemUTC(),
-) {
+) : PersonRecords {
     private val dao = database.peopleDao()
     private val refreshMutex = Mutex()
 
-    fun observePeople(): Flow<PeopleSnapshot?> = dao.observePeople().map { it?.toModel() }
-    fun observeProfile(id: String): Flow<PersonProfile?> = dao.observeProfile(id).map { it?.toModel() }
+    override fun observePeople(): Flow<PeopleSnapshot?> = dao.observePeople().map { it?.toModel() }
+    override fun observeProfile(id: String): Flow<PersonProfile?> = dao.observeProfile(id).map { it?.toModel() }
 
-    suspend fun refreshPeople(): RefreshResult = refresh {
+    override suspend fun refreshPeople(): RefreshResult = refresh {
         val accepted = service.people().acceptedPeople()
         database.withTransaction {
             dao.putSnapshot(ListSnapshotRow(serviceUpdated = accepted.updated,
@@ -56,7 +63,7 @@ class PersonRepository(
         RefreshResult.Success(accepted.discardedCount)
     }
 
-    suspend fun refreshProfile(id: String): RefreshResult = refresh {
+    override suspend fun refreshProfile(id: String): RefreshResult = refresh {
         validateId(id)
         val dto = service.profile(id)
         if (dto.id != id || dto.lastModified.isBlank()) throw InvalidRecord("Invalid profile metadata")
