@@ -31,8 +31,11 @@ jobs:
           java-version: '21'
       - name: Set up Gradle cache
         uses: gradle/actions/setup-gradle@07d1f8453baaff67fb503883367f8b13e6158a54 # v6
-      - name: Install compile SDK
-        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+          log-accepted-android-sdk-licenses: false
       - name: JVM tests, lint and APK
         run: ./gradlew testDebugUnitTest lintDebug assembleDebug --console=plain
       - name: Enable emulator acceleration
