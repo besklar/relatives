@@ -151,6 +151,6 @@ A running emulator or connected device is required for instrumentation.
 
 ## Time and development assistance
 
-- **Measured implementation/verification:** Approximately 78 minutes across seven phases, including about 13 minutes for the fullscreen viewer and README cleanup.
-- **Total elapsed project time:** approximately 2 hours 24 minutes, from about 6:00 p.m. to 8:24 p.m. on October 8, 2026 (America/Denver), including planning and review pauses. The first commit was at 6:08 p.m.
+- **Measured implementation/verification:** Approximately 93 minutes across eight phases, including about 13 minutes for the fullscreen viewer/README cleanup and 15 minutes for CI setup and hosted verification.
+- **Total elapsed project time:** approximately 2 hours 40 minutes, starting around 6:00 p.m. on October 8, 2026 (America/Denver), including planning, review pauses and CI setup/verification. The first commit was at 6:08 p.m.
 - AI-assisted development was used for implementation support, test generation, and documentation. Architecture, product behavior, security decisions, and final verification remain subject to human review.
