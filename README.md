@@ -1,5 +1,7 @@
 # Relatives
 
+[![Android CI](https://github.com/besklar/relatives/actions/workflows/android-ci.yml/badge.svg?branch=main)](https://github.com/besklar/relatives/actions/workflows/android-ci.yml)
+
 Native Android person browser for the FamilySearch take-home exercise. Built with Kotlin, Jetpack Compose and durable offline storage.
 
 ## Assignment coverage
@@ -103,6 +105,8 @@ flowchart LR
 
 A running emulator or connected device is required for instrumentation.
 
+**CI:** GitHub Actions runs JVM tests, lint and the APK build on pull requests and pushes to `main`, using JDK 21. The badge reflects the latest main run; each run summarizes actual JVM test counts and saves test/lint reports for seven days. Android instrumentation tests run locally on an emulator or device.
+
 - **Automated results:** **34 JVM + 38 Android tests pass** on API 36; `assembleDebug` and `lintDebug` pass. Lint reports zero errors and 19 unsuppressed tool/dependency/backup warnings.
 - **Tests earn their keep at failure boundaries:** HTTP decoding, partial-record recovery, SQLite rollback/migration/reopen, cancellation, image corruption/limits/cache reuse, ViewModel states, navigation, rendered transition midpoints and fullscreen gestures.
 - **Live offline check:** load all 16 people and browse Hannah → Bartholomew → Amos; force-stop, enable airplane mode, disable Wi-Fi, and repeat the journey. Saved text and portraits remain available. An unopened relative shows an explicit uncached failure.
@@ -147,6 +151,6 @@ A running emulator or connected device is required for instrumentation.
 
 ## Time and development assistance
 
-- **Measured implementation/verification:** Approximately 78 minutes across seven phases, including about 13 minutes for the fullscreen viewer and README cleanup.
-- **Total elapsed project time:** approximately 2 hours 24 minutes, from about 6:00 p.m. to 8:24 p.m. on October 8, 2026 (America/Denver), including planning and review pauses. The first commit was at 6:08 p.m.
-- **AI assistance:** used for planning, implementation and verification. The author reviews decisions and must be able to explain and defend the code.
+- **Measured implementation/verification:** Approximately 93 minutes across eight phases, including about 13 minutes for the fullscreen viewer/README cleanup and 15 minutes for CI setup and hosted verification.
+- **Total elapsed project time:** approximately 2 hours 40 minutes, starting around 6:00 p.m. on October 8, 2026 (America/Denver), including planning, review pauses and CI setup/verification. The first commit was at 6:08 p.m.
+- AI-assisted development was used for implementation support, test generation, and documentation. Architecture, product behavior, security decisions, and final verification remain subject to human review.
